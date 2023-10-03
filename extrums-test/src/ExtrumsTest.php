@@ -18,9 +18,21 @@ class ExtrumsTestPlugin {
         $this->FILE_PATH = plugin_dir_path(__FILE__);
         $this->DIR_URL = plugin_dir_url(__DIR__);
         $this->setup_actions();
+
+        // $this->add_filter('wpseo_metadesc', [$this,'prefix_filter_description_example']);
+
         $this->init_styles();
         $this->init_scripts();
     }
+
+    // function prefix_filter_description_example( $description ) {
+    //     error_log('1111');
+    //     if ( is_single( 6 ) ) {
+    //         error_log('222');
+    //       $description = 'My custom custom meta description';
+    //     }
+    //     return $description;
+    //   }
 
     private function setup_actions() {
         register_activation_hook($this->FILE_PATH, array($this, 'activate'));
@@ -80,7 +92,7 @@ class ExtrumsTestPlugin {
         $this->actions = $this->add($this->actions, $hook, $callback, $priority, $accepted_args);
     }
 
-    public function add_filter($hook, $component, $callback, $priority = 10, $accepted_args = 1) {
+    public function add_filter($hook, $callback, $priority = 10, $accepted_args = 1) {
         $this->filters = $this->add($this->filters, $hook, $callback, $priority, $accepted_args);
     }
 
@@ -192,6 +204,7 @@ class ExtrumsTestPlugin {
                     class="btn btn-secondary"
                 >
             </form>
+            <table class="table table-bordered" id="extrums_results"></table>
         </div>
         <?php
     }
@@ -202,7 +215,6 @@ class ExtrumsTestPlugin {
             'message' => '',
             'data' => []
         ];
-        // error_log(print_r($_POST, true));
 
         try {
             check_admin_referer('search_form_submit_action', '_extrums_search_nonce');
@@ -216,6 +228,44 @@ class ExtrumsTestPlugin {
                 throw new Exception("Empty search string.");
             }
 
+            global $wpdb;
+            $query = "
+                SELECT p.* FROM $wpdb->posts p
+                LEFT JOIN $wpdb->postmeta pm on pm.post_id = p.ID
+                WHERE
+                    p.post_type='post' AND p.post_status='publish'
+                    AND (
+                        p.post_title LIKE %s OR p.post_title LIKE %s OR p.post_title LIKE %s
+                        OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s
+
+                    )
+            ";
+            // OR (pm.meta_key = '_yoast_wpseo_metadesc' AND pm.meta_value like %s)
+            $string = $wpdb->esc_like(trim($_POST['search_string']));
+            $prepared_query = $wpdb->prepare($query, [
+                $string . ' %',
+                '% ' . $string . ' %',
+                '% ' . $string,
+                $string . ' %',
+                '% ' . $string . ' %',
+                '% ' . $string,
+            ]);
+            // error_log($prepared_query);
+            $posts = $wpdb->get_results(
+               $prepared_query
+            );
+
+            if (!empty($posts)) {
+                foreach ($posts as $post) {
+                    $response['data'][] = [
+                        'id' => $post->ID,
+                        'title' => $post->post_title,
+                        'content' => $post->post_content,
+                    ];
+                }
+            }
+
+            // error_log(print_r($posts, true));
         } catch(Exception $e) {
             $response['success'] = false;
             $response['message'] = $e->getMessage();
