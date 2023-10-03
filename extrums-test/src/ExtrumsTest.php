@@ -2,6 +2,8 @@
 
 namespace Extrums;
 
+use Exception;
+
 class ExtrumsTestPlugin {
     private $DIR_PATH;
     private $FILE_PATH;
@@ -27,6 +29,10 @@ class ExtrumsTestPlugin {
         $this->add_menu_pages();
         $this->add_styles();
         $this->add_scripts();
+
+        $this->add_ajax_handler('search_form_submit', function() {
+            $this->search_form_submit();
+        });
     }
 
     public static function activate() {
@@ -55,7 +61,7 @@ class ExtrumsTestPlugin {
             $this->get_page_title(),
             $this->get_menu_title(),
             'manage_options',
-            'extrunms-test-plugin',
+            'extrums-test-plugin',
             [$this, 'extrums_test_plugin_page_content'],
             '',
             20
@@ -150,21 +156,71 @@ class ExtrumsTestPlugin {
         return $this;
     }
 
+    private function add_ajax_handler(
+        string $name,
+        callable $callable,
+        bool $authenticated_only=true,
+    ): ExtrumsTestPlugin
+    {
+        $name = sanitize_title(trim($name));
+        if (!empty($name)) {
+            $this->add_action('wp_ajax_' . $name, $callable);
+            if (!$authenticated_only) {
+                $this->add_action('wp_ajax_nopriv_' . $name, $callable);
+            }
+        }
+
+        return $this;
+    }
+
     public function extrums_test_plugin_page_content() {
         ?>
         <div>
             <h1><?php echo $this->get_page_title();?></h1>
-            <form id="extrums_search_form">
+            <form id="extrums_search_form"
+                data-action="search_form_submit"
+            >
                 <input type="text" name="search_string"
                     id="extrums_search_string"
                     placeholder="keyword..."
+                    required
                     class=""
                 >
+                <input type="hidden" name="action" value="search_form_submit">
+                <?php wp_nonce_field('search_form_submit_action', '_extrums_search_nonce');?>
                 <input type="submit" value="Search"
                     class="btn btn-secondary"
                 >
             </form>
         </div>
         <?php
+    }
+
+    private function search_form_submit() {
+        $response = [
+            'success' => true,
+            'message' => '',
+            'data' => []
+        ];
+        // error_log(print_r($_POST, true));
+
+        try {
+            check_admin_referer('search_form_submit_action', '_extrums_search_nonce');
+
+            if (empty($_POST['_extrums_search_nonce'])
+            || !wp_verify_nonce($_POST['_extrums_search_nonce'], 'search_form_submit_action')) {
+                throw new Exception("Wrong nonce.");
+            }
+
+            if (empty($_POST['search_string'])) {
+                throw new Exception("Empty search string.");
+            }
+
+        } catch(Exception $e) {
+            $response['success'] = false;
+            $response['message'] = $e->getMessage();
+        }
+
+        wp_send_json($response);
     }
 }
