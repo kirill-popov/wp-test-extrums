@@ -45,6 +45,9 @@ class ExtrumsTestPlugin {
         $this->add_ajax_handler('search_form_submit', function() {
             $this->search_form_submit();
         });
+        $this->add_ajax_handler('replace_form_submit', function() {
+            $this->replace_form_submit();
+        });
     }
 
     public static function activate() {
@@ -186,27 +189,10 @@ class ExtrumsTestPlugin {
     }
 
     public function extrums_test_plugin_page_content() {
-        ?>
-        <div>
-            <h1><?php echo $this->get_page_title();?></h1>
-            <form id="extrums_search_form"
-                data-action="search_form_submit"
-            >
-                <input type="text" name="search_string"
-                    id="extrums_search_string"
-                    placeholder="keyword..."
-                    required
-                    class=""
-                >
-                <input type="hidden" name="action" value="search_form_submit">
-                <?php wp_nonce_field('search_form_submit_action', '_extrums_search_nonce');?>
-                <input type="submit" value="Search"
-                    class="btn btn-secondary"
-                >
-            </form>
-            <table class="table table-bordered" id="extrums_results"></table>
-        </div>
-        <?php
+        $args = [
+            'title' => $this->get_page_title()
+        ];
+        require_once $this->DIR_PATH . '/partials/search_form.php';
     }
 
     private function search_form_submit() {
@@ -228,33 +214,7 @@ class ExtrumsTestPlugin {
                 throw new Exception("Empty search string.");
             }
 
-            global $wpdb;
-            $query = "
-                SELECT p.* FROM $wpdb->posts p
-                LEFT JOIN $wpdb->postmeta pm on pm.post_id = p.ID
-                WHERE
-                    p.post_type='post' AND p.post_status='publish'
-                    AND (
-                        p.post_title LIKE %s OR p.post_title LIKE %s OR p.post_title LIKE %s
-                        OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s
-
-                    )
-            ";
-            // OR (pm.meta_key = '_yoast_wpseo_metadesc' AND pm.meta_value like %s)
-            $string = $wpdb->esc_like(trim($_POST['search_string']));
-            $prepared_query = $wpdb->prepare($query, [
-                $string . ' %',
-                '% ' . $string . ' %',
-                '% ' . $string,
-                $string . ' %',
-                '% ' . $string . ' %',
-                '% ' . $string,
-            ]);
-            // error_log($prepared_query);
-            $posts = $wpdb->get_results(
-               $prepared_query
-            );
-
+            $posts = $this->get_posts_by_keyword($_POST['search_string']);
             if (!empty($posts)) {
                 foreach ($posts as $post) {
                     $response['data'][] = [
@@ -272,5 +232,42 @@ class ExtrumsTestPlugin {
         }
 
         wp_send_json($response);
+    }
+
+    private function get_posts_by_keyword($string='') {
+        $results = [];
+        if (!empty($string)) {
+            global $wpdb;
+            $query = "
+                SELECT p.* FROM $wpdb->posts p
+                LEFT JOIN $wpdb->postmeta pm on pm.post_id = p.ID
+                WHERE
+                    p.post_type='post' AND p.post_status='publish'
+                    AND (
+                        p.post_title LIKE %s OR p.post_title LIKE %s OR p.post_title LIKE %s
+                        OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s
+
+                    )
+            ";
+            // OR (pm.meta_key = '_yoast_wpseo_metadesc' AND pm.meta_value like %s)
+            $string = $wpdb->esc_like(trim($string));
+            $prepared_query = $wpdb->prepare($query, [
+                $string . ' %',
+                '% ' . $string . ' %',
+                '% ' . $string,
+                $string . ' %',
+                '% ' . $string . ' %',
+                '% ' . $string,
+            ]);
+            // error_log($prepared_query);
+            $results = $wpdb->get_results(
+               $prepared_query
+            );
+        }
+        return $results;
+    }
+
+    private function replace_form_submit() {
+        error_log(print_r($_POST, true));
     }
 }

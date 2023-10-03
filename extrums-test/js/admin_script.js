@@ -7,7 +7,7 @@
 
                 let results_el = $('#extrums_results');
                 let data = form.serializeArray()
-                .reduce(function (json, {name, value}) {
+                .reduce(function(json, {name, value}) {
                     json[name] = value;
                     return json;
                 }, {});
@@ -33,6 +33,32 @@
                 });
             });
         }
+
+        $('body').on('submit', '.replace-form', (e) => {
+            e.preventDefault();
+            console.log();
+
+            let form = $(e.currentTarget);
+            let data = form.serializeArray()
+            .reduce(function(json, {name, value}) {
+                json[name] = value;
+                return json;
+            }, {});
+            data.find = $('#extrums_search_string').val();
+
+            $.ajax({
+                url: ajaxurl,
+                method: 'POST',
+                data: data,
+                dataType: 'JSON',
+                beforeSend: () => {
+                    // make_placeholders(results_el);
+                },
+                success: (resp) => {
+                    console.log(resp);
+                }
+            });
+        });
     });
 
     let make_placeholders = function(table) {
@@ -76,10 +102,12 @@
         let html = '';
 
         if ('' !== key) {
-            html += '<form>';
-            html += '<input type="text" name="replace_string" placeholder="new keyword...">';
+            html += '<form class="replace-form">';
+            html += '<input type="text" name="replace" placeholder="new keyword...">';
+            html += '<input type="hidden" name="action" value="replace_form_submit">';
+            html += '<input type="hidden" name="field" value="'+key+'">';
             html += '<br>';
-            html += '<input type="submit" value="Replace" class="btn btn-secondary">';
+            html += '<input type="submit" value="Replace" class="btn btn-secondary mt-1">';
             html += '</form>';
         }
 
