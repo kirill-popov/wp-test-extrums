@@ -21,14 +21,19 @@
                         make_placeholders(results_el);
                     },
                     success: (resp) => {
-                        let data = [];
+                        let resp_data = [];
+                        let replace_form = '';
 
                         if ("undefined" != typeof resp.data
                         && resp.data.length) {
-                            data = resp.data;
+                            resp_data = resp.data;
+                        }
+                        if ("undefined" != typeof resp.replace_form
+                        && '' != resp.replace_form) {
+                            replace_form = resp.replace_form;
                         }
 
-                        make_results_table(results_el, data);
+                        make_results_table(results_el, data, resp_data, replace_form);
                     }
                 });
             });
@@ -36,7 +41,6 @@
 
         $('body').on('submit', '.replace-form', (e) => {
             e.preventDefault();
-            console.log();
 
             let form = $(e.currentTarget);
             let data = form.serializeArray()
@@ -51,43 +55,51 @@
                 method: 'POST',
                 data: data,
                 dataType: 'JSON',
-                beforeSend: () => {
-                    // make_placeholders(results_el);
-                },
                 success: (resp) => {
-                    console.log(resp);
+                    let resp_data = [];
+
+                    if ("undefined" !== typeof resp.data
+                    && resp.data.length) {
+                        resp_data = resp.data;
+                    }
+
+                    for (item of resp_data) {
+                        refresh_row(item, data.replace);
+                    }
                 }
             });
         });
     });
 
     let make_placeholders = function(table) {
-        let columns = 3;
         let rows = 4;
+        let columns = 3;
         let html = '<tbody class="placeholder-glow">';
 
-        for (let i = 0; i < columns; i++) {
+        for (let i = 0; i < rows; i++) {
             html += '<tr>';
-            for (let j = 0; j < rows; j++) {
+            for (let j = 0; j < columns; j++) {
                 html += '<td class=""><span class="placeholder col-12"></span></td>';
             }
-            html += '</tr>';
         }
         table.html(html);
     };
 
-    let make_results_table = function(table, data=[]) {
+    let make_results_table = function(table, data, resp_data=[], replace_form='') {
         let titles = [
             { key: '', value: 'ID' },
             { key: 'title', value: 'Title' },
             { key: 'content', value: 'Content' },
         ];
         let html = '<tbody>';
-        html += '<tr>' + titles.map((title) => '<th class="text-center">' + title.value + replace_form(title.key) + '</th>') + '</tr>';
+        html += '<tr>' + titles.map((title) => {
+            let form = title.key != '' ? replace_form.replace('%KEY%', title.key) : '';
+            return '<th class="text-center">' + title.value + form + '</th>';
+        }) + '</tr>';
 
-        if (data.length) {
-            for (const item of data) {
-                html += '<tr><td>' + item.id + '</td><td>' + item.title + '</td><td>' + item.content + '</td></tr>';
+        if (resp_data.length) {
+            for (const item of resp_data) {
+                html += make_row(item, data.search_string);
             }
 
         } else {
@@ -98,19 +110,19 @@
         table.html(html);
     };
 
-    let replace_form = function(key) {
-        let html = '';
+    let make_row = function(item, search_string, replace = false) {
+        let bg_class = replace ? 'text-bg-success' : 'text-bg-warning';
+        const regex = new RegExp('\\b' + search_string + '\\b', "gi");
+        const title = item.title.replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
+        const content = item.content.replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
 
-        if ('' !== key) {
-            html += '<form class="replace-form">';
-            html += '<input type="text" name="replace" placeholder="new keyword...">';
-            html += '<input type="hidden" name="action" value="replace_form_submit">';
-            html += '<input type="hidden" name="field" value="'+key+'">';
-            html += '<br>';
-            html += '<input type="submit" value="Replace" class="btn btn-secondary mt-1">';
-            html += '</form>';
-        }
-
-        return html;
+        return '<tr class="post-' + item.id + '"><td>' + item.id + '</td><td>' + title + '</td><td>' + content + '</td></tr>';
     };
+
+    let refresh_row = function(item, search_string) {
+        let row = $('#extrums_results').find('.post-' + item.id);
+        if (row.length) {
+            row.replaceWith(make_row(item, search_string, true));
+        }
+    }
 })(jQuery);

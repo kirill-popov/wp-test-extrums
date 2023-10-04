@@ -19,20 +19,9 @@ class ExtrumsTestPlugin {
         $this->DIR_URL = plugin_dir_url(__DIR__);
         $this->setup_actions();
 
-        // $this->add_filter('wpseo_metadesc', [$this,'prefix_filter_description_example']);
-
         $this->init_styles();
         $this->init_scripts();
     }
-
-    // function prefix_filter_description_example( $description ) {
-    //     error_log('1111');
-    //     if ( is_single( 6 ) ) {
-    //         error_log('222');
-    //       $description = 'My custom custom meta description';
-    //     }
-    //     return $description;
-    //   }
 
     private function setup_actions() {
         register_activation_hook($this->FILE_PATH, array($this, 'activate'));
@@ -199,7 +188,7 @@ class ExtrumsTestPlugin {
         $response = [
             'success' => true,
             'message' => '',
-            'data' => []
+            'data' => [],
         ];
 
         try {
@@ -223,9 +212,12 @@ class ExtrumsTestPlugin {
                         'content' => $post->post_content,
                     ];
                 }
+
+                ob_start();
+                require_once $this->DIR_PATH . '/partials/replace_form.php';
+                $response['replace_form'] = ob_get_clean();
             }
 
-            // error_log(print_r($posts, true));
         } catch(Exception $e) {
             $response['success'] = false;
             $response['message'] = $e->getMessage();
@@ -234,32 +226,47 @@ class ExtrumsTestPlugin {
         wp_send_json($response);
     }
 
-    private function get_posts_by_keyword($string='') {
+    private function get_posts_by_keyword($string='', $field='') {
         $results = [];
         if (!empty($string)) {
             global $wpdb;
+
+            switch ($field) {
+                case '':
+                    $where = '(p.post_title REGEXP %s OR p.post_content REGEXP %s)';
+                    $values = [
+                        '\\b' . $string . '\\b', // full word match
+                        '\\b' . $string . '\\b', // full word match
+                    ];
+                    break;
+
+                case 'title':
+                    $where = 'p.post_title REGEXP %s';
+                    $values = [
+                        '\\b' . $string . '\\b', // full word match
+                    ];
+                    break;
+
+                case 'content':
+                    $where = 'p.post_content REGEXP %s';
+                    $values = [
+                        '\\b' . $string . '\\b', // full word match
+                    ];
+                    break;
+
+                default:
+                    throw new Exception("Wrong field value.");
+            }
+
             $query = "
                 SELECT p.* FROM $wpdb->posts p
                 LEFT JOIN $wpdb->postmeta pm on pm.post_id = p.ID
                 WHERE
                     p.post_type='post' AND p.post_status='publish'
-                    AND (
-                        p.post_title LIKE %s OR p.post_title LIKE %s OR p.post_title LIKE %s
-                        OR p.post_content LIKE %s OR p.post_content LIKE %s OR p.post_content LIKE %s
-
-                    )
-            ";
+                    AND " . $where;
             // OR (pm.meta_key = '_yoast_wpseo_metadesc' AND pm.meta_value like %s)
             $string = $wpdb->esc_like(trim($string));
-            $prepared_query = $wpdb->prepare($query, [
-                $string . ' %',
-                '% ' . $string . ' %',
-                '% ' . $string,
-                $string . ' %',
-                '% ' . $string . ' %',
-                '% ' . $string,
-            ]);
-            // error_log($prepared_query);
+            $prepared_query = $wpdb->prepare($query, $values);
             $results = $wpdb->get_results(
                $prepared_query
             );
@@ -268,6 +275,79 @@ class ExtrumsTestPlugin {
     }
 
     private function replace_form_submit() {
-        error_log(print_r($_POST, true));
+        $response = [
+            'success' => true,
+            'message' => '',
+            'data' => [],
+        ];
+
+        try {
+            check_admin_referer('replace_form_submit_action', '_extrums_replace_nonce');
+
+            if (empty($_POST['_extrums_replace_nonce'])
+            || !wp_verify_nonce($_POST['_extrums_replace_nonce'], 'replace_form_submit_action')) {
+                throw new Exception("Wrong nonce.");
+            }
+
+            if (empty($_POST['field'])) {
+                throw new Exception("Empty search field.");
+            }
+
+            if (empty($_POST['find'])) {
+                throw new Exception("Empty search string.");
+            }
+
+            $posts = $this->get_posts_by_keyword($_POST['find'], $_POST['field']);
+            $ids = array_map(function($post) {
+                return $post->ID;
+            }, $posts);
+
+            switch ($_POST['field']) {
+                case 'title':
+                    $field = 'post_title';
+                    break;
+
+                case 'content':
+                    $field = 'post_content';
+                    break;
+
+                default:
+                    throw new Exception("Wrong field value.");
+            }
+
+            global $wpdb;
+            $query = "
+                UPDATE $wpdb->posts as p
+                SET p.".$field." = REGEXP_REPLACE(".$field.", %s, %s)
+                WHERE ID IN(" . implode(', ', array_fill(0, count($ids), '%d')) . ")
+            ";
+            $values = array_merge(
+                [
+                    '\\b' . $_POST['find'] . '\\b',
+                    $_POST['replace'],
+                ],
+                $ids
+            );
+            $prepared = $wpdb->prepare($query, $values);
+
+            $wpdb->query($prepared);
+
+            $posts = $this->get_posts_by_keyword($_POST['replace'], $_POST['field']);
+            if (!empty($posts)) {
+                foreach ($posts as $post) {
+                    $response['data'][] = [
+                        'id' => $post->ID,
+                        'title' => $post->post_title,
+                        'content' => $post->post_content,
+                    ];
+                }
+            }
+
+        } catch(Exception $e) {
+            $response['success'] = false;
+            $response['message'] = $e->getMessage();
+        }
+
+        wp_send_json($response);
     }
 }
