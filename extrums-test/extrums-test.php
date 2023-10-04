@@ -15,7 +15,7 @@ if (file_exists( __DIR__ . '/vendor/autoload.php')) {
 define('DIR_PATH', plugin_dir_path(__FILE__));
 define('DIR_URL', plugin_dir_url(__FILE__));
 
-if (class_exists('ExtrumsTestPlugin')) {
+if (class_exists('ExtrumsTest\Classes\ExtrumsTestPlugin')) {
     $plugin = new ExtrumsTestPlugin();
     $plugin->run();
 }
