@@ -118,7 +118,7 @@
         let cols = [];
 
         Object.keys(item).map((key) => {
-            let updated_val = item[key] == null ? '' : item[key].replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
+            let updated_val = item[key] == null ? '' : item[key].toString().replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
             cols.push('<td>' + updated_val + '</td>');
         });
 

@@ -210,7 +210,10 @@ class ExtrumsTestPlugin {
             $posts = $this->get_posts_by_keyword($_POST['search_string']);
             if (!empty($posts)) {
                 foreach ($posts as $post) {
-                    $response['data'][] = PostResponce::make($post);
+                    $wp_post = get_post($post->ID);
+                    $wp_post->meta_title = $post->meta_title;
+                    $wp_post->meta_desc = $post->meta_desc;
+                    $response['data'][] = PostResponce::make($wp_post);
                 }
 
                 ob_start();
@@ -251,6 +254,20 @@ class ExtrumsTestPlugin {
 
                 case 'content':
                     $where = 'p.post_content REGEXP %s';
+                    $values = [
+                        '\\b' . $string . '\\b', // full word match
+                    ];
+                    break;
+
+                case 'meta_title':
+                    $where = 'pm_title.meta_value REGEXP %s';
+                    $values = [
+                        '\\b' . $string . '\\b', // full word match
+                    ];
+                    break;
+
+                case 'meta_desc':
+                    $where = 'pm_desc.meta_value REGEXP %s';
                     $values = [
                         '\\b' . $string . '\\b', // full word match
                     ];
@@ -315,6 +332,16 @@ class ExtrumsTestPlugin {
                     $update_post = true;
                     break;
 
+                case 'meta_title':
+                    $field = '_yoast_wpseo_title';
+                    $update_post_meta = true;
+                    break;
+
+                case 'meta_desc':
+                    $field = '_yoast_wpseo_metadesc';
+                    $update_post_meta = true;
+                    break;
+
                 default:
                     throw new Exception("Wrong field value.");
             }
@@ -327,31 +354,23 @@ class ExtrumsTestPlugin {
                             $field => preg_replace('/\b' . $_POST['find'] . '\b/', $_POST['replace'], $post->$field),
                         ];
                         wp_update_post($upd_post);
+
+                    } else if ($update_post_meta) {
+                        $post_meta_field = $_POST['field'];
+                        $value = preg_replace('/\b' . $_POST['find'] . '\b/', $_POST['replace'], $post->$post_meta_field);
+
+                        update_post_meta($post->ID, $field, $value);
                     }
                 }
             }
 
-            global $wpdb;
-            // $query = "
-            //     UPDATE $wpdb->posts as p
-            //     SET p.".$field." = REGEXP_REPLACE(".$field.", %s, %s)
-            //     WHERE ID IN(" . implode(', ', array_fill(0, count($ids), '%d')) . ")
-            // ";
-            // $values = array_merge(
-            //     [
-            //         '\\b' . $_POST['find'] . '\\b',
-            //         $_POST['replace'],
-            //     ],
-            //     $ids
-            // );
-            // $prepared = $wpdb->prepare($query, $values);
-
-            // $wpdb->query($prepared);
-
             $posts = $this->get_posts_by_keyword($_POST['replace'], $_POST['field']);
             if (!empty($posts)) {
                 foreach ($posts as $post) {
-                    $response['data'][] = PostResponce::make($post);
+                    $wp_post = get_post($post->ID);
+                    $wp_post->meta_title = $post->meta_title;
+                    $wp_post->meta_desc = $post->meta_desc;
+                    $response['data'][] = PostResponce::make($wp_post);
                 }
             }
 
