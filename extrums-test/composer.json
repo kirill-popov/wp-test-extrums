@@ -1,0 +1,16 @@
+{
+    "name": "kyrylo/extrums-test",
+    "type": "wordpress-plugin",
+    "autoload": {
+        "psr-4": {
+            "ExtrumsTest\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Kyrylo Popov",
+            "email": "barisuch@gmail.com"
+        }
+    ],
+    "require": {}
+}

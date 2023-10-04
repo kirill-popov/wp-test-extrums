@@ -90,6 +90,8 @@
             { key: '', value: 'ID' },
             { key: 'title', value: 'Title' },
             { key: 'content', value: 'Content' },
+            { key: 'meta_title', value: 'Meta Title' },
+            { key: 'meta_desc', value: 'Meta Description' },
         ];
         let html = '<tbody>';
         html += '<tr>' + titles.map((title) => {
@@ -113,10 +115,14 @@
     let make_row = function(item, search_string, replace = false) {
         let bg_class = replace ? 'text-bg-success' : 'text-bg-warning';
         const regex = new RegExp('\\b' + search_string + '\\b', "gi");
-        const title = item.title.replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
-        const content = item.content.replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
+        let cols = [];
 
-        return '<tr class="post-' + item.id + '"><td>' + item.id + '</td><td>' + title + '</td><td>' + content + '</td></tr>';
+        Object.keys(item).map((key) => {
+            let updated_val = item[key] == null ? '' : item[key].replace(regex, '<span class="' + bg_class + '">' + search_string + '</span>');
+            cols.push('<td>' + updated_val + '</td>');
+        });
+
+        return '<tr class="post-' + item.id + '">'+cols.join()+'</tr>';
     };
 
     let refresh_row = function(item, search_string) {

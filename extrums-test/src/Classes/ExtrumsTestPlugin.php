@@ -1,8 +1,12 @@
 <?php
 
-namespace Extrums;
+namespace ExtrumsTest\Classes;
 
 use Exception;
+
+if (!defined('ABSPATH')) {
+	die();
+}
 
 class ExtrumsTestPlugin {
     private $DIR_PATH;
@@ -14,9 +18,9 @@ class ExtrumsTestPlugin {
     private $scripts = [];
 
     public function __construct() {
-        $this->DIR_PATH = plugin_dir_path(__DIR__);
+        $this->DIR_PATH = DIR_PATH;
         $this->FILE_PATH = plugin_dir_path(__FILE__);
-        $this->DIR_URL = plugin_dir_url(__DIR__);
+        $this->DIR_URL = DIR_URL;
         $this->setup_actions();
 
         $this->init_styles();
@@ -206,11 +210,7 @@ class ExtrumsTestPlugin {
             $posts = $this->get_posts_by_keyword($_POST['search_string']);
             if (!empty($posts)) {
                 foreach ($posts as $post) {
-                    $response['data'][] = [
-                        'id' => $post->ID,
-                        'title' => $post->post_title,
-                        'content' => $post->post_content,
-                    ];
+                    $response['data'][] = PostResponce::make($post);
                 }
 
                 ob_start();
@@ -233,8 +233,10 @@ class ExtrumsTestPlugin {
 
             switch ($field) {
                 case '':
-                    $where = '(p.post_title REGEXP %s OR p.post_content REGEXP %s)';
+                    $where = '(p.post_title REGEXP %s OR p.post_content REGEXP %s OR pm_title.meta_value REGEXP %s OR pm_desc.meta_value REGEXP %s)';
                     $values = [
+                        '\\b' . $string . '\\b', // full word match
+                        '\\b' . $string . '\\b', // full word match
                         '\\b' . $string . '\\b', // full word match
                         '\\b' . $string . '\\b', // full word match
                     ];
@@ -259,16 +261,17 @@ class ExtrumsTestPlugin {
             }
 
             $query = "
-                SELECT p.* FROM $wpdb->posts p
-                LEFT JOIN $wpdb->postmeta pm on pm.post_id = p.ID
+                SELECT p.*, pm_title.meta_value as meta_title, pm_desc.meta_value as meta_desc
+                FROM $wpdb->posts p
+                LEFT JOIN $wpdb->postmeta pm_title on pm_title.post_id = p.ID AND pm_title.meta_key='_yoast_wpseo_title'
+                LEFT JOIN $wpdb->postmeta pm_desc on pm_desc.post_id = p.ID AND pm_desc.meta_key='_yoast_wpseo_metadesc'
                 WHERE
                     p.post_type='post' AND p.post_status='publish'
                     AND " . $where;
-            // OR (pm.meta_key = '_yoast_wpseo_metadesc' AND pm.meta_value like %s)
-            $string = $wpdb->esc_like(trim($string));
+
             $prepared_query = $wpdb->prepare($query, $values);
             $results = $wpdb->get_results(
-               $prepared_query
+                $prepared_query
             );
         }
         return $results;
@@ -298,48 +301,57 @@ class ExtrumsTestPlugin {
             }
 
             $posts = $this->get_posts_by_keyword($_POST['find'], $_POST['field']);
-            $ids = array_map(function($post) {
-                return $post->ID;
-            }, $posts);
+            $update_post = false;
+            $update_post_meta = false;
 
             switch ($_POST['field']) {
                 case 'title':
                     $field = 'post_title';
+                    $update_post = true;
                     break;
 
                 case 'content':
                     $field = 'post_content';
+                    $update_post = true;
                     break;
 
                 default:
                     throw new Exception("Wrong field value.");
             }
 
-            global $wpdb;
-            $query = "
-                UPDATE $wpdb->posts as p
-                SET p.".$field." = REGEXP_REPLACE(".$field.", %s, %s)
-                WHERE ID IN(" . implode(', ', array_fill(0, count($ids), '%d')) . ")
-            ";
-            $values = array_merge(
-                [
-                    '\\b' . $_POST['find'] . '\\b',
-                    $_POST['replace'],
-                ],
-                $ids
-            );
-            $prepared = $wpdb->prepare($query, $values);
+            if (!empty($posts)) {
+                foreach ($posts as $post) {
+                    if ($update_post) {
+                        $upd_post = [
+                            'ID' => $post->ID,
+                            $field => preg_replace('/\b' . $_POST['find'] . '\b/', $_POST['replace'], $post->$field),
+                        ];
+                        wp_update_post($upd_post);
+                    }
+                }
+            }
 
-            $wpdb->query($prepared);
+            global $wpdb;
+            // $query = "
+            //     UPDATE $wpdb->posts as p
+            //     SET p.".$field." = REGEXP_REPLACE(".$field.", %s, %s)
+            //     WHERE ID IN(" . implode(', ', array_fill(0, count($ids), '%d')) . ")
+            // ";
+            // $values = array_merge(
+            //     [
+            //         '\\b' . $_POST['find'] . '\\b',
+            //         $_POST['replace'],
+            //     ],
+            //     $ids
+            // );
+            // $prepared = $wpdb->prepare($query, $values);
+
+            // $wpdb->query($prepared);
 
             $posts = $this->get_posts_by_keyword($_POST['replace'], $_POST['field']);
             if (!empty($posts)) {
                 foreach ($posts as $post) {
-                    $response['data'][] = [
-                        'id' => $post->ID,
-                        'title' => $post->post_title,
-                        'content' => $post->post_content,
-                    ];
+                    $response['data'][] = PostResponce::make($post);
                 }
             }
 
